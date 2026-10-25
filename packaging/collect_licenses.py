@@ -66,18 +66,30 @@ def copy_cpython_incorporated() -> list[str]:
 
 
 def copy_tcl_tk() -> list[str]:
-    """Tcl and Tk ship the same license.terms; Tcl's is found without opening a window."""
+    """license.terms of the bundled Tcl and Tk: the installed copy if there is one, else the
+    official tcltk source at the exact patch level (python.org builds do not install it)."""
     import tkinter
+    import urllib.request
     tcl = tkinter.Tcl()
-    lib = Path(tcl.eval("info library"))                # e.g. .../lib/tcl8.6 (python.org) or Homebrew's
-    cands = [lib / "license.terms", lib.parent / "license.terms", lib.parent.parent / "license.terms"]
-    src = next((c for c in cands if c.is_file()), None)
-    if src is None:
-        raise SystemExit(f"Tcl/Tk license.terms not found near {lib}")
-    dst = OUT / f"tcl-tk-{tcl.eval('info patchlevel')}" / "license.terms"
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(src, dst)
-    return [str(dst.relative_to(OUT))]
+    level = tcl.eval("info patchlevel")                 # e.g. 8.6.13
+    lib = Path(tcl.eval("info library"))
+    local = next((c for c in (lib / "license.terms", lib.parent / "license.terms",
+                              lib.parent.parent / "license.terms") if c.is_file()), None)
+    found = []
+    for name in ("tcl", "tk"):
+        dst = OUT / f"{name}-{level}" / "license.terms"
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if local is not None:
+            shutil.copyfile(local, dst)                 # Tcl and Tk ship the same terms
+        else:
+            url = f"https://raw.githubusercontent.com/tcltk/{name}/core-{level.replace('.', '-')}/license.terms"
+            with urllib.request.urlopen(url, timeout=60) as r:
+                text = r.read().decode()
+            if "Regents of the University of" not in text:
+                raise SystemExit(f"unexpected content from {url}")
+            dst.write_text(f"Source: {url}\n\n{text}")
+        found.append(str(dst.relative_to(OUT)))
+    return found
 
 
 def main() -> None:
