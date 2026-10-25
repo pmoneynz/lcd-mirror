@@ -1,4 +1,4 @@
-# Builds LCD Mirror for MPC3000 for macOS (Apple silicon, Intel) and Windows.
+# Builds LCD Mirror for macOS (Apple silicon, Intel) and Windows.
 # Every run uploads the zips as workflow artifacts.  A tag v* also makes a DRAFT
 # release with the zips and SHA256SUMS.txt, to be checked and published by hand.
 name: build
@@ -41,15 +41,15 @@ jobs:
         run: pyinstaller --noconfirm packaging/lcd_mirror_viewer.spec
       - name: Zip (macOS)
         if: runner.os == 'macOS'
-        run: ditto -c -k --sequesterRsrc --keepParent "dist/LCD Mirror for MPC3000.app" "LCD-Mirror-for-MPC3000-${{ matrix.target }}.zip"
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/LCD Mirror.app" "LCD-Mirror-${{ matrix.target }}.zip"
       - name: Zip (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path "dist/LCD Mirror for MPC3000" -DestinationPath "LCD-Mirror-for-MPC3000-${{ matrix.target }}.zip"
+        run: Compress-Archive -Path "dist/LCD Mirror" -DestinationPath "LCD-Mirror-${{ matrix.target }}.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: LCD-Mirror-for-MPC3000-${{ matrix.target }}.zip
+          path: LCD-Mirror-${{ matrix.target }}.zip
           if-no-files-found: error
 
   release:
@@ -63,12 +63,12 @@ jobs:
         with:
           merge-multiple: true
       - name: Checksums
-        run: sha256sum LCD-Mirror-for-MPC3000-*.zip > SHA256SUMS.txt && cat SHA256SUMS.txt
+        run: sha256sum LCD-Mirror-*.zip > SHA256SUMS.txt && cat SHA256SUMS.txt
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft
-          --title "LCD Mirror for MPC3000 $GITHUB_REF_NAME"
-          --notes "Unsigned builds. See the README for first-run steps and how to check SHA256SUMS.txt."
-          LCD-Mirror-for-MPC3000-*.zip SHA256SUMS.txt
+          --title "LCD Mirror $GITHUB_REF_NAME"
+          --notes "LCD Mirror, a companion helper for the P-MONEY MPC3000 update. Unsigned builds: see the README for first-run steps and how to check SHA256SUMS.txt."
+          LCD-Mirror-*.zip SHA256SUMS.txt

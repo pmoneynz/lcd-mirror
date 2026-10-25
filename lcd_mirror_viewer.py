@@ -36,6 +36,9 @@ screen instead.  Any other MIDI on the port is ignored.
 from __future__ import annotations
 
 __version__ = "1.0.0"
+ABOUT = ("A companion helper for the P-MONEY MPC3000 update: shows the MPC3000's screen, sent "
+         "as MIDI SysEx from MIDI OUT D.\n\nFree software, MIT License. Unofficial; not affiliated "
+         "with Akai Professional or inMusic.")
 
 import argparse
 import functools
@@ -413,12 +416,15 @@ def settings_path() -> Path:
         base = Path(os.environ.get("APPDATA") or Path.home())
     else:
         base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
-    return base / "MPC3000 LCD Mirror" / "settings.json"
+    return base / "LCD Mirror" / "settings.json"
 
 
 def load_settings() -> dict:
+    path = settings_path()
+    if not path.exists():                               # 1.0.0 drafts kept them under the old name
+        path = path.parent.parent / "MPC3000 LCD Mirror" / "settings.json"
     try:
-        data = json.loads(settings_path().read_text())
+        data = json.loads(path.read_text())
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
@@ -757,7 +763,7 @@ class TkView:
         self.tk = tk
         self.font = font()
         self.root = tk.Tk()
-        self.root.title("LCD Mirror for MPC3000")
+        self.root.title("LCD Mirror")
         self.root.configure(bg="#2b2b2b")
         # No focus ring or border: Tk draws them inside the canvas, over its
         # coordinate origin, which hid the top pixel row and the left column.
@@ -822,6 +828,9 @@ class TkView:
         menubar.add_cascade(label="View", menu=view)
         self.midi_menu = tk.Menu(menubar, tearoff=0, postcommand=self._fill_midi_menu)
         menubar.add_cascade(label="MIDI input", menu=self.midi_menu)
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="About LCD Mirror", command=self._about)
+        menubar.add_cascade(label="Help", menu=help_menu)
         self.root.config(menu=menubar)
         for key, step in (("minus", -1), ("equal", 1), ("plus", 1)):
             self.root.bind(f"<{key}>", lambda _e, step=step: self._zoom_step(step))
@@ -846,6 +855,10 @@ class TkView:
 
     def _close(self) -> None:
         self.alive = False
+
+    def _about(self) -> None:
+        from tkinter import messagebox
+        messagebox.showinfo("About LCD Mirror", f"LCD Mirror {__version__}\n\n{ABOUT}", parent=self.root)
 
     def _fill_midi_menu(self) -> None:
         """List the inputs each time the menu opens (interfaces come and go)."""
@@ -1016,7 +1029,7 @@ class TkView:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--version", action="version", version=f"LCD Mirror for MPC3000 {__version__}")
+    ap.add_argument("--version", action="version", version=f"LCD Mirror {__version__}")
     ap.add_argument("--port", help="substring of the MIDI input name (default: the last one chosen in the "
                                    "MIDI input menu, else the first)")
     ap.add_argument("--log", type=Path, help="append every decoded message with the laptop clock")

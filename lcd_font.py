@@ -1,4 +1,4 @@
-"""5x7 character shapes for LCD Mirror for MPC3000.
+"""5x7 character shapes for LCD Mirror.
 
 Codes 0x20-0x7E, seven rows each, 5 bits per row, bit 4 = leftmost pixel.  Some
 were read from photos of an MPC3000 screen, the others designed for this

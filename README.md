@@ -1,4 +1,6 @@
-# LCD Mirror for MPC3000
+# LCD Mirror
+
+**A companion helper for the P-MONEY MPC3000 update.**
 
 A free desktop window that shows an Akai MPC3000's screen live on a Mac or PC.
 The MPC sends its screen as MIDI SysEx, and this app draws it: the 40×8 text
@@ -10,27 +12,27 @@ which instrument the app works with.
 
 ## What you need
 
-- An MPC3000 running the **LCD mirror** OS modification. That is a patch to OS
-  3.16, applied to your own copy of the OS. It is not part of this repository,
-  and no Akai software is included or distributed here.
+- An MPC3000 running the **P-MONEY MPC3000 update** with its LCD mirror, which
+  streams the screen. The update patches your own copy of OS 3.16. It is not
+  part of this repository, and no Akai software is included or distributed here.
 - A MIDI interface: the MPC3000's **MIDI OUT D** to the computer's MIDI input.
 
 ## Download
 
 Get the zip for your computer from the
-[Releases](https://github.com/pmoneynz/mpc3000-lcd-mirror/releases) page:
+[Releases](https://github.com/pmoneynz/lcd-mirror/releases) page:
 
 | File | For |
 |---|---|
-| `LCD-Mirror-for-MPC3000-macos-apple-silicon.zip` | Macs with M1 or later |
-| `LCD-Mirror-for-MPC3000-macos-intel.zip` | Intel Macs |
-| `LCD-Mirror-for-MPC3000-windows-x64.zip` | Windows 10 / 11 (64-bit) |
+| `LCD-Mirror-macos-apple-silicon.zip` | Macs with M1 or later |
+| `LCD-Mirror-macos-intel.zip` | Intel Macs |
+| `LCD-Mirror-windows-x64.zip` | Windows 10 / 11 (64-bit) |
 
 Each release has a `SHA256SUMS.txt`. To check a download:
 
 ```
-shasum -a 256 LCD-Mirror-for-MPC3000-*.zip       # macOS
-certutil -hashfile LCD-Mirror-for-MPC3000-windows-x64.zip SHA256   # Windows
+shasum -a 256 LCD-Mirror-*.zip       # macOS
+certutil -hashfile LCD-Mirror-windows-x64.zip SHA256   # Windows
 ```
 
 and compare with the line in `SHA256SUMS.txt`. The apps are built from
@@ -42,7 +44,7 @@ each release).
 - **macOS:** unzip, move the app to Applications, then right-click it and choose
   **Open**, then **Open** again. If macOS still refuses, go to System Settings,
   then Privacy & Security, and click **Open Anyway**.
-- **Windows:** unzip the whole folder and run `LCD Mirror for MPC3000.exe`. If
+- **Windows:** unzip the whole folder and run `LCD Mirror.exe`. If
   SmartScreen warns, click **More info**, then **Run anyway**.
 
 ## Use
@@ -70,8 +72,8 @@ each release).
 - The app only **reads** the MIDI input you choose. It never sends MIDI, never
   uses the network, and collects nothing.
 - It writes one small settings file, holding your View and MIDI choices:
-  - macOS: `~/Library/Application Support/MPC3000 LCD Mirror/settings.json`
-  - Windows: `%APPDATA%\MPC3000 LCD Mirror\settings.json`
+  - macOS: `~/Library/Application Support/LCD Mirror/settings.json`
+  - Windows: `%APPDATA%\LCD Mirror\settings.json`
 - Every message is range-checked before it is drawn. Malformed or foreign SysEx
   is counted and ignored, and the test suite feeds the decoder random data.
 

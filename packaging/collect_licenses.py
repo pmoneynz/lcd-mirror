@@ -100,7 +100,7 @@ def main() -> None:
     for dist in DISTS:
         found += copy_dist(dist)
     (OUT / "README.txt").write_text(
-        "License texts of the components bundled in LCD Mirror for MPC3000, copied from the\n"
+        "License texts of the components bundled in LCD Mirror, copied from the\n"
         "installed packages at build time. Tcl and Tk share one license (license.terms).\n"
         "PyInstaller's bootloader is GPL-2.0 with an exception that allows distributing\n"
         "bundled applications under any license (see its COPYING.txt).\n\n" + "\n".join(found) + "\n")
