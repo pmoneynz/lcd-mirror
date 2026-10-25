@@ -1,0 +1,4 @@
+# Run from source: python -m pip install -r requirements.txt
+python-rtmidi==1.5.8
+numpy==2.5.4
+pillow==13.0.0
