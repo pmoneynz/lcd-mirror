@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Hardened runtime entitlements for LCD Mirror.  Empty: the app needs no exceptions
+     (no network, no camera or microphone, no unsigned code).  Add one here only if a
+     signed build is shown to need it. -->
+<plist version="1.0">
+<dict>
+</dict>
+</plist>
