@@ -39,15 +39,12 @@ and compare with the line in `SHA256SUMS.txt`. The apps are built from
 this repository's source by GitHub Actions (see the workflow run linked from
 each release).
 
-**Signing.** The Apple Silicon app is signed with a Developer ID and notarized
-by Apple, so it opens normally: unzip, move it to Applications, double-click.
-The Intel Mac and Windows builds are not signed yet. The first time you open one:
+**Signing.** Both Mac apps (Apple Silicon and Intel) are signed with a
+Developer ID and notarized by Apple, so they open normally: unzip, move the app
+to Applications, double-click.
 
-- **Intel Mac:** right-click the app and choose **Open**, then **Open** again.
-  If macOS still refuses, go to System Settings, then Privacy & Security, and
-  click **Open Anyway**.
-- **Windows:** unzip the whole folder and run `LCD Mirror.exe`. If
-  SmartScreen warns, click **More info**, then **Run anyway**.
+The Windows build is not signed yet. Unzip the whole folder and run
+`LCD Mirror.exe`. If SmartScreen warns, click **More info**, then **Run anyway**.
 
 ## Use
 
