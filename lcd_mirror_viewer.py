@@ -35,7 +35,7 @@ screen instead.  Any other MIDI on the port is ignored.
 """
 from __future__ import annotations
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 ABOUT = ("A companion helper for the P-MONEY MPC3000 update: shows the MPC3000's screen, sent "
          "as MIDI SysEx from MIDI OUT D.\n\nFree software, MIT License. Unofficial; not affiliated "
          "with Akai Professional or inMusic.")
@@ -743,7 +743,8 @@ def render_cell(pixels: list[str], k: int, look: str, row: int, col: int, level:
 class TkView:
     """40x8 text through emu/lcd_font.py's glyphs (hatch for codes it lacks) or 240x64 pixels.
 
-    View menu or keys: 2 / 4 / m zoom (- / = step it), p next palette, l real / flat look,
+    View menu or keys: 2 / 4 / m zoom (- / = step it), f full screen (Esc leaves it; there the
+    display takes the largest scale that fits and is centred), p next palette, l real / flat look,
     s status line on / off, b cursor blink on / off, [ / ] contrast (10 % steps)
     and 0 to reset it to the default 100 %: the text against its background
     (50 % = the tuned colours, 100 % = pure white or black).  "real" (numpy + Pillow) draws the
@@ -798,6 +799,7 @@ class TkView:
                                  value=z, command=self._relayout, accelerator="M" if z == "max" else z)
         view.add_command(label="Zoom in", accelerator="=", command=lambda: self._zoom_step(1))
         view.add_command(label="Zoom out", accelerator="-", command=lambda: self._zoom_step(-1))
+        view.add_command(label="Full screen", accelerator="F", command=self._toggle_full)
         view.add_separator()
         for name, (label, *_) in PALETTES.items():
             view.add_radiobutton(label=label, variable=self.palette, value=name, command=self._relayout)
@@ -847,6 +849,13 @@ class TkView:
             self.root.bind(key, lambda _e: (self.blink.set(not self.blink.get()), self._relayout()))
         for key in ("s", "S"):
             self.root.bind(key, lambda _e: (self.show_status.set(not self.show_status.get()), self._relayout()))
+        for key in ("f", "F"):
+            self.root.bind(key, lambda _e: self._toggle_full())
+        self.root.bind("<Escape>", lambda _e: self.full and self._toggle_full())
+        # Full screen from the menu, F or the green title-bar button: draw() follows it.  Not a
+        # <Configure> binding: python-rtmidi runs the Cocoa event loop without the GIL (opening a
+        # port, listing ports), and a Python callback from there aborts the interpreter.
+        self.full, self.full_size = False, None
         self.alive = True
         self.root.protocol("WM_DELETE_WINDOW", self._close)
         self.last = None
@@ -889,6 +898,29 @@ class TkView:
         k = min(sw // (FB_W + 2 * PAD), (sh - STATUS_H) // (FB_H + 2 * PAD))
         return max(2, k - k % 2)
 
+    def _is_full(self) -> bool:
+        """Tk's full-screen attribute, or a window covering the screen (native full screen
+        from the green button, should Tk not report it)."""
+        if self.root.attributes("-fullscreen"):
+            return True
+        return (self.root.winfo_width() >= self.root.winfo_screenwidth()
+                and self.root.winfo_height() >= self.root.winfo_screenheight() - 40)
+
+    def _toggle_full(self) -> None:
+        self.root.attributes("-fullscreen", not self.root.attributes("-fullscreen"))
+
+    def _follow_full(self) -> None:
+        full = self._is_full()
+        size = (self.root.winfo_width(), self.root.winfo_height()) if full else None
+        if (full, size) != (self.full, self.full_size):
+            self.full, self.full_size = full, size
+            self._relayout()
+
+    def _full_zoom(self) -> int:
+        """Largest scale whose display fits the full-screen window, on whichever screen it is."""
+        w, h = self.full_size
+        return max(1, min(w // (FB_W + 2 * PAD), (h - self.status_h) // (FB_H + 2 * PAD)))
+
     def _zoom_step(self, step: int) -> None:
         """Next / previous of x2, x4 and max (x6 on a 14-inch MacBook Pro), stopping at either end."""
         i = ZOOMS.index(self.zoom.get()) + step
@@ -915,16 +947,28 @@ class TkView:
 
     def _relayout(self) -> None:
         z = self.zoom.get()
-        self.k = self._max_zoom() if z == "max" else int(z)
+        self.status_h = STATUS_H if self.show_status.get() else 0
+        if self.full:
+            self.k = self._full_zoom()
+        else:
+            self.k = self._max_zoom() if z == "max" else int(z)
         _, self.bg, tuned, _ = PALETTES[self.palette.get()]
         self.fg = text_colour(self.palette.get(), self.contrast / 100)
         real = self.look.get() == "real"
         # Real look: the glass is the image and the window around it is black, as on the unit.
         self.status_fg = "#8c8c8c" if real else tuned
-        self.status_h = STATUS_H if self.show_status.get() else 0
+        back = "#050505" if real else self.bg
         self.canvas.config(width=(FB_W + 2 * PAD) * self.k, height=(FB_H + 2 * PAD) * self.k + self.status_h,
-                           bg="#050505" if real else self.bg)
-        self.root.geometry("")                          # let the window follow the canvas size
+                           bg=back)
+        if self.full:                                   # centred, the window around it in the same colour
+            self.canvas.pack_forget()
+            self.canvas.place(relx=0.5, rely=0.5, anchor="center")
+            self.root.configure(bg=back)
+        else:
+            self.canvas.place_forget()
+            self.canvas.pack()
+            self.root.configure(bg="#2b2b2b")
+            self.root.geometry("")                      # let the window follow the canvas size
         self.last = None                                # redraw on the next draw()
         self._save()
 
@@ -961,6 +1005,7 @@ class TkView:
     def draw(self, dec: Decoder, port: str, age: float) -> bool:
         if not self.alive:
             return False
+        self._follow_full()
         s = dec.screen
         status = f"{port}  {dec.counters()}  last data {age:.0f} s ago  contrast {self.contrast} %" + \
             ("  (transport running, or link down)" if age > 6 else "")
