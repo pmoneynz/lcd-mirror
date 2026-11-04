@@ -72,6 +72,53 @@ class SevenInEight(unittest.TestCase):
         dec.feed(v.pcopy_message(3, 1900, 30, 30))               # past 1919
         self.assertEqual((dec.bad, dec.messages), (2, 2))
 
+    def test_xor(self) -> None:
+        dec = v.Decoder()
+        dec.feed(v.pix_message(0, 16 * 30, bytes(range(1, 31))))
+        pattern = bytes([0x0F, 0xFF, 0xFF, 0x00, 0xEF, 0x80])
+        msg = v.xor_message(1, 16 * 30 + 3, 32, pattern)              # rows 16-47, columns 3-8
+        dec.feed(msg)
+        want = bytearray(v.FB_SIZE)
+        want[16 * 30:17 * 30] = bytes(range(1, 31))
+        for r in range(16, 48):
+            for i, b in enumerate(pattern):
+                want[r * 30 + 3 + i] ^= b
+        self.assertEqual(bytes(dec.screen.fb), bytes(want))
+        dec.feed(msg)                                                  # twice: back as it was
+        self.assertEqual(bytes(dec.screen.fb[16 * 30:17 * 30]), bytes(range(1, 31)))
+        self.assertEqual(sum(dec.screen.fb), sum(range(1, 31)))
+        self.assertLessEqual(len(v.xor_message(2, 0, 64, bytes(range(30)))), v.MAX_MSG)
+        dec.feed(v.xor_message(3, 25, 1, bytes(6)))                    # past the row's end
+        dec.feed(v.xor_message(4, 63 * 30, 2, bytes(1)))               # past row 63
+        dec.feed(v.xor_message(5, 0, 0, bytes(1)))                     # no rows
+        self.assertEqual((dec.bad, dec.messages), (3, 3))
+
+    def test_block(self) -> None:
+        dec = v.Decoder()
+        data = bytes(range(0x80, 0x80 + 2 * 8))
+        msg = v.block_message(0, 8 * 30 + 9, 2, data)                  # rows 8-15, columns 9-10
+        self.assertLessEqual(len(msg), v.MAX_MSG)
+        dec.feed(msg)
+        for r in range(8):
+            self.assertEqual(bytes(dec.screen.fb[(8 + r) * 30 + 9:(8 + r) * 30 + 11]), data[2 * r:2 * r + 2])
+        self.assertEqual(sum(1 for b in dec.screen.fb if b), 16)
+        self.assertLessEqual(len(v.block_message(1, 0, 15, bytes(45))), v.MAX_MSG)
+        dec.feed(v.block_message(3, 28, 3, bytes(6)))                  # past the row's end
+        dec.feed(v.block_message(4, 63 * 30, 1, bytes(2)))             # past row 63
+        self.assertEqual((dec.bad, dec.messages), (2, 1))
+
+    def test_protocol_3_stream_from_3k_plus_decodes_without_bad_messages(self) -> None:
+        """The two type-9 messages 3K PLUS 1.0 sent on the Mixer page (captured 2026-11-04,
+        app emulator, OUT D), which 1.1.0 counted as bad."""
+        dec = v.Decoder()
+        dec.feed(bytes.fromhex("f07d4d334b010003030310f7"))                     # HELLO proto 3, OS 3.16
+        for hexmsg in ("f07d4d334b097a026803030000083e00081c00000808f7",
+                       "f07d4d334b097c026a03030000107c00103800001010f7"):
+            dec.feed(bytes.fromhex(hexmsg))
+        self.assertEqual(dec.bad, 0)
+        self.assertEqual(dec.kinds.get(v.BLOCK), 2)
+        self.assertTrue(any(dec.screen.fb))
+
     def test_pix_message(self) -> None:
         dec = v.Decoder()
         data = bytes(range(0x70, 0x90))
@@ -298,3 +345,80 @@ class RealLook(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OneMidiClient(unittest.TestCase):
+    """1.1.0 made a new rtmidi.MidiIn() on every reconnect retry and every MIDI menu
+    open; making a CoreMIDI client lets a menu callback run without the GIL, which
+    aborted the app while it reconnected.  The app now makes one client, ever."""
+
+    def setUp(self) -> None:
+        test = self
+
+        class FakeMidiIn:
+            made = 0
+
+            def __init__(self) -> None:
+                FakeMidiIn.made += 1
+                self.open = None
+
+            def ignore_types(self, **_kw) -> None:
+                pass
+
+            def get_ports(self) -> list[str]:
+                return list(test.ports)
+
+            def is_port_open(self) -> bool:
+                return self.open is not None
+
+            def open_port(self, i: int) -> None:
+                self.open = i
+
+            def close_port(self) -> None:
+                self.open = None
+
+            def get_message(self):
+                return None
+
+        self.fake = FakeMidiIn
+        self.ports = ["IAC Driver Bus 1", "MPC3KApp Out D"]
+        module = type(sys)("rtmidi")
+        module.MidiIn = FakeMidiIn
+        self.saved_module, sys.modules["rtmidi"] = sys.modules.get("rtmidi"), module
+        self.saved_client = getattr(v, "_RTMIDI_CLIENT", None)
+        v._RTMIDI_CLIENT = None
+
+    def tearDown(self) -> None:
+        if self.saved_module is None:
+            sys.modules.pop("rtmidi", None)
+        else:
+            sys.modules["rtmidi"] = self.saved_module
+        v._RTMIDI_CLIENT = self.saved_client
+
+    def test_reconnect_and_menu_never_make_a_second_client(self) -> None:
+        inp = v.Input("Out D")
+        self.assertEqual(inp.name, "MPC3KApp Out D")
+        self.ports.remove("MPC3KApp Out D")               # the unit (or the MPC3KApp) goes away
+        self.assertFalse(inp.present())
+        inp.close()
+        for _ in range(5):                                # the run loop retries once a second
+            with self.assertRaises(OSError):
+                v.Input("Out D")
+            self.assertEqual(v.midi_inputs(), ["IAC Driver Bus 1"])   # the MIDI menu opened meanwhile
+        self.ports.append("MPC3KApp Out D")               # back
+        again = v.Input("Out D")
+        self.assertTrue(again.present())
+        self.assertEqual(self.fake.made, 1)
+
+    def test_a_port_listed_without_a_name_is_skipped(self) -> None:
+        self.ports = [None, "MPC3KApp Out D"]              # CoreMIDI, while a port is being removed
+        self.assertEqual(v.Input("Out D").name, "MPC3KApp Out D")
+        self.assertEqual(v.Input(None).name, "MPC3KApp Out D")
+        self.assertEqual(v.midi_inputs(), ["MPC3KApp Out D"])
+
+    def test_switching_input_reuses_the_client_and_closes_the_old_port(self) -> None:
+        first = v.Input("IAC")
+        second = v.Input("Out D")
+        self.assertIs(first.mi, second.mi)
+        self.assertEqual(second.mi.open, 1)
+        self.assertEqual(self.fake.made, 1)

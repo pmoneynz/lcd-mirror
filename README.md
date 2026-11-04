@@ -1,6 +1,6 @@
 # LCD Mirror
 
-**A companion helper for the P-MONEY MPC3000 update.**
+**A companion helper for the 3K PLUS MPC3000 update.**
 
 A free desktop window that shows an Akai MPC3000's screen live on a Mac or PC.
 The MPC sends its screen as MIDI SysEx, and this app draws it: the 40×8 text
@@ -12,7 +12,7 @@ which instrument the app works with.
 
 ## What you need
 
-- An MPC3000 running the **P-MONEY MPC3000 update** with its LCD mirror, which
+- An MPC3000 running the **3K PLUS MPC3000 update** with its LCD mirror, which
   streams the screen. The update patches your own copy of OS 3.16. It is not
   part of this repository, and no Akai software is included or distributed here.
 - A MIDI interface: the MPC3000's **MIDI OUT D** to the computer's MIDI input.
@@ -24,8 +24,8 @@ Get the zip for your computer from the
 
 | File | For |
 |---|---|
-| `LCD-Mirror-macos-apple-silicon.zip` | Macs with M1 or later |
-| `LCD-Mirror-macos-intel.zip` | Intel Macs |
+| `LCD-Mirror-macos-apple-silicon.zip` | Macs with M1 or later (macOS 11 Big Sur or later) |
+| `LCD-Mirror-macos-intel.zip` | Intel Macs (macOS 10.15 Catalina or later) |
 | `LCD-Mirror-windows-x64.zip` | Windows 10 / 11 (64-bit) |
 
 Each release has a `SHA256SUMS.txt`. To check a download:
@@ -114,7 +114,8 @@ packaging/sign_macos.sh "Developer ID Application: NAME (TEAMID)" PROFILE
 The MPC side sends messages of at most 64 bytes:
 `F0 7D 4D 33 4B <type> <seq> <payload> F7`. `7D` is the non-commercial
 manufacturer ID, and `4D 33 4B` is "M3K". The message types are described at the
-top of `lcd_mirror_viewer.py`. Any other MIDI on the same input is ignored.
+top of `lcd_mirror_viewer.py`; this viewer decodes protocol 3 (types 01 to 09),
+which the update's 1.0 release sends. Any other MIDI on the same input is ignored.
 
 ## License
 

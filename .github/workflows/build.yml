@@ -21,8 +21,13 @@ jobs:
         include:
           - os: macos-15
             target: macos-apple-silicon
+            # Big Sur and later: as for Intel, never the runner's own macOS (numpy's 14.0 arm64 wheel).
+            wheel_platform: macosx_11_0_arm64
           - os: macos-15-intel
             target: macos-intel
+            # Catalina and later: wheels built for 10.15 or older, never the runner's own macOS
+            # (numpy's macosx_14_0 wheel made 1.1.0 need Sonoma on Intel).
+            wheel_platform: macosx_10_15_x86_64
           - os: windows-latest
             target: windows-x64
     runs-on: ${{ matrix.os }}
@@ -32,13 +37,22 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install pinned dependencies (binary wheels only)
+        if: matrix.wheel_platform == ''
         run: "python -m pip install --only-binary=:all: -r requirements-build.txt"
+      - name: Install pinned dependencies (wheels for the oldest supported macOS)
+        if: matrix.wheel_platform != ''
+        run: |
+          python -m pip download --only-binary=:all: --platform "${{ matrix.wheel_platform }}" --python-version 3.12 --implementation cp -d wheels -r requirements-build.txt
+          python -m pip install --no-index --find-links wheels -r requirements-build.txt
       - name: Test
         run: python -m unittest discover -s tests -v
       - name: Collect bundled licenses
         run: python packaging/collect_licenses.py
       - name: Build
         run: pyinstaller --noconfirm packaging/lcd_mirror_viewer.spec
+      - name: Check the minimum macOS (every binary vs LSMinimumSystemVersion)
+        if: runner.os == 'macOS'
+        run: python packaging/check_macos_min.py "dist/LCD Mirror.app"
       - name: Zip (macOS)
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent "dist/LCD Mirror.app" "LCD-Mirror-${{ matrix.target }}.zip"
@@ -70,5 +84,5 @@ jobs:
         run: >
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft
           --title "LCD Mirror $GITHUB_REF_NAME"
-          --notes "LCD Mirror, a companion helper for the P-MONEY MPC3000 update. Unsigned builds: see the README for first-run steps and how to check SHA256SUMS.txt."
+          --notes "LCD Mirror, a companion helper for the 3K PLUS MPC3000 update. Unsigned builds: see the README for first-run steps and how to check SHA256SUMS.txt."
           LCD-Mirror-*.zip SHA256SUMS.txt

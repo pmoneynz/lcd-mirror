@@ -21,6 +21,10 @@ that increments per message (gaps are drops).  Types:
     06 FULL    a full repaint follows
     07 PCOPY   offset hi7, offset lo7, len 1..127, distance hi7, distance lo7: framebuffer
                bytes offset+i = offset-distance+i for i = 0..len-1, in that order (overlap allowed)
+    08 XOR     offset hi7, offset lo7, width 1..30, rows 1..64, pattern packed 7-in-8 (width
+               bytes): framebuffer bytes offset+30r+i ^= pattern[i], within one row (protocol 3)
+    09 BLOCK   offset hi7, offset lo7, width 1..30, rows 1..64, width*rows bytes (at most 45)
+               packed 7-in-8, row by row, within one row of the framebuffer (protocol 3)
 
 Character escape: a code below 7D is sent as itself; 7E nn is code 80|nn; 7F nn
 is the literal nn (for 7D, 7E and 7F); 7D n c is n (4..127) copies of the code c,
@@ -35,8 +39,8 @@ screen instead.  Any other MIDI on the port is ignored.
 """
 from __future__ import annotations
 
-__version__ = "1.1.0"
-ABOUT = ("A companion helper for the P-MONEY MPC3000 update: shows the MPC3000's screen, sent "
+__version__ = "1.1.1"
+ABOUT = ("A companion helper for the 3K PLUS MPC3000 update: shows the MPC3000's screen, sent "
          "as MIDI SysEx from MIDI OUT D.\n\nFree software, MIT License. Unofficial; not affiliated "
          "with Akai Professional or inMusic.")
 
@@ -54,8 +58,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 HEADER = bytes([0xF0, 0x7D, 0x4D, 0x33, 0x4B])
 MAX_MSG = 64
-PROTO = 2
-HELLO, ROW, CURSOR, MODE, PIX, FULL, PCOPY = 1, 2, 3, 4, 5, 6, 7
+PROTO = 3                          # 3K PLUS 1.0 sends protocol 3 (2 is 3 without XOR and BLOCK)
+HELLO, ROW, CURSOR, MODE, PIX, FULL, PCOPY, XOR, BLOCK = 1, 2, 3, 4, 5, 6, 7, 8, 9
+BLOCK_MAX = 45
 RUN = 0x7D
 RUN_MIN = 4
 COLS, ROWS = 40, 8
@@ -121,6 +126,14 @@ def pix_message(seq: int, offset: int, data: bytes) -> bytes:
 
 def pcopy_message(seq: int, offset: int, length: int, distance: int) -> bytes:
     return message(PCOPY, seq, bytes([offset >> 7, offset & 0x7F, length, distance >> 7, distance & 0x7F]))
+
+
+def xor_message(seq: int, offset: int, rows: int, pattern: bytes) -> bytes:
+    return message(XOR, seq, bytes([offset >> 7, offset & 0x7F, len(pattern), rows]) + pack7(pattern))
+
+
+def block_message(seq: int, offset: int, width: int, data: bytes) -> bytes:
+    return message(BLOCK, seq, bytes([offset >> 7, offset & 0x7F, width, len(data) // width]) + pack7(data))
 
 
 # ---------------------------------------------------------------- decoder
@@ -322,6 +335,27 @@ class Decoder:
                 raise ValueError("PCOPY out of range")
             for i in range(n):
                 s.fb[off + i] = s.fb[off - d + i]
+        elif kind == XOR:
+            if len(p) < 4:
+                raise ValueError("XOR length")
+            off, w, n = (p[0] << 7) | p[1], p[2], p[3]
+            if not 1 <= w <= FB_STRIDE or not 1 <= n <= FB_H or off % FB_STRIDE + w > FB_STRIDE or off // FB_STRIDE + n > FB_H:
+                raise ValueError("XOR out of range")
+            pattern = unpack7(p[4:], w)
+            for r in range(n):
+                at = off + r * FB_STRIDE
+                for i, b in enumerate(pattern):
+                    s.fb[at + i] ^= b
+        elif kind == BLOCK:
+            if len(p) < 4:
+                raise ValueError("BLOCK length")
+            off, w, n = (p[0] << 7) | p[1], p[2], p[3]
+            if (not 1 <= w <= FB_STRIDE or not 1 <= n <= FB_H or w * n > BLOCK_MAX
+                    or off % FB_STRIDE + w > FB_STRIDE or off // FB_STRIDE + n > FB_H):
+                raise ValueError("BLOCK out of range")
+            data = unpack7(p[4:], w * n)
+            for r in range(n):
+                s.fb[off + r * FB_STRIDE:off + r * FB_STRIDE + w] = data[r * w:(r + 1) * w]
         else:
             raise ValueError(f"unknown type {kind}")
 
@@ -338,6 +372,28 @@ def read_replay_log(path: Path, port: int) -> list[tuple[float, int]]:
 
 # ---------------------------------------------------------------- live input
 
+_RTMIDI_CLIENT = None
+
+
+def rtmidi_client():
+    """The app's one python-rtmidi input client, created on first use.
+
+    Creating a client (rtmidi.MidiIn()) makes a CoreMIDI client with the GIL
+    released, and CoreMIDI may run the main thread's event loop meanwhile.  If a
+    menu opens then, Tk calls back into Python without the GIL and the process
+    aborts ("PyEval_RestoreThread: ... the GIL is released"; 1.1.0, reconnecting
+    while the MIDI menu was used).  So the client is made once, at start-up
+    before the window exists, and every later list/open/close reuses it.
+    Raises ImportError without python-rtmidi."""
+    global _RTMIDI_CLIENT
+    if _RTMIDI_CLIENT is None:
+        import rtmidi
+        client = rtmidi.MidiIn()
+        client.ignore_types(sysex=False, timing=True, active_sense=True)
+        _RTMIDI_CLIENT = client
+    return _RTMIDI_CLIENT
+
+
 class Input:
     """One MIDI input through python-rtmidi, else mido.  `poll()` returns the bytes
     received since the last call; `present()` says whether the port is still listed
@@ -346,12 +402,12 @@ class Input:
     def __init__(self, name: str | None) -> None:
         self.want = name
         try:
-            import rtmidi                               # python-rtmidi
+            self.mi = rtmidi_client()                   # python-rtmidi; one client for the app's life
             self.lib = "rtmidi"
-            self.mi = rtmidi.MidiIn()
-            self.mi.ignore_types(sysex=False, timing=True, active_sense=True)
             ports = self.mi.get_ports()
-            idx = self._pick(ports)
+            idx = self._pick(ports)                     # raises before anything is opened
+            if self.mi.is_port_open():
+                self.mi.close_port()
             self.mi.open_port(idx)
             self.name = ports[idx]
         except ImportError:
@@ -361,11 +417,11 @@ class Input:
             self.name = ports[self._pick(ports)]
             self.port = mido.open_input(self.name)
 
-    def _pick(self, ports: list[str]) -> int:
+    def _pick(self, ports: list[str | None]) -> int:
         for i, p in enumerate(ports):
-            if self.want is None or self.want.lower() in p.lower():
-                return i
-        raise OSError(f"no MIDI input matching {self.want!r} in {ports}")
+            if p and (self.want is None or self.want.lower() in p.lower()):   # CoreMIDI may list a
+                return i                                                       # vanishing port as None
+        raise OSError(f"no MIDI input matching {self.want!r} in {[p for p in ports if p]}")
 
     def poll(self) -> list[int]:
         data: list[int] = []
@@ -391,7 +447,8 @@ class Input:
 
 
 def describe(msg: bytes) -> str:
-    names = {HELLO: "HELLO", ROW: "ROW", CURSOR: "CURSOR", MODE: "MODE", PIX: "PIX", FULL: "FULL", PCOPY: "PCOPY"}
+    names = {HELLO: "HELLO", ROW: "ROW", CURSOR: "CURSOR", MODE: "MODE", PIX: "PIX", FULL: "FULL", PCOPY: "PCOPY",
+             XOR: "XOR", BLOCK: "BLOCK"}
     return f"{names.get(msg[5], '?')} seq={msg[6]} {msg[7:-1].hex()}"
 
 
@@ -444,12 +501,7 @@ def save_settings(data: dict) -> None:
 def midi_inputs() -> list[str]:
     """The MIDI input names the system offers now."""
     try:
-        import rtmidi
-        mi = rtmidi.MidiIn()
-        try:
-            return list(mi.get_ports())
-        finally:
-            del mi
+        return [p for p in rtmidi_client().get_ports() if p]   # never a new client here: see rtmidi_client()
     except ImportError:
         try:
             import mido
@@ -468,6 +520,12 @@ def run_live(args: argparse.Namespace) -> int:
         if log:
             log.write(f"{time.time():.3f} {text}\n")
             log.flush()
+    try:
+        rtmidi_client()                                 # before any window or menu exists
+    except ImportError:
+        pass                                            # mido fallback, or the message below
+    except Exception as exc:                            # noqa: BLE001 - rtmidi raises its own types
+        print(f"MIDI unavailable: {exc}", file=sys.stderr)
     ui = None if args.headless else TkView(args.zoom, args.palette, args.look, args.contrast, args.port,
                                            args.saved)
     inp: Input | None = None
