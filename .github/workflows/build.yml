@@ -21,6 +21,8 @@ jobs:
         include:
           - os: macos-15
             target: macos-apple-silicon
+            # Big Sur and later: as for Intel, never the runner's own macOS (numpy's 14.0 arm64 wheel).
+            wheel_platform: macosx_11_0_arm64
           - os: macos-15-intel
             target: macos-intel
             # Catalina and later: wheels built for 10.15 or older, never the runner's own macOS
