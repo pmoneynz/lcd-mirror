@@ -24,8 +24,8 @@ Get the zip for your computer from the
 
 | File | For |
 |---|---|
-| `LCD-Mirror-macos-apple-silicon.zip` | Macs with M1 or later |
-| `LCD-Mirror-macos-intel.zip` | Intel Macs |
+| `LCD-Mirror-macos-apple-silicon.zip` | Macs with M1 or later (macOS 11 Big Sur or later) |
+| `LCD-Mirror-macos-intel.zip` | Intel Macs (macOS 10.15 Catalina or later) |
 | `LCD-Mirror-windows-x64.zip` | Windows 10 / 11 (64-bit) |
 
 Each release has a `SHA256SUMS.txt`. To check a download:
