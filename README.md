@@ -114,7 +114,8 @@ packaging/sign_macos.sh "Developer ID Application: NAME (TEAMID)" PROFILE
 The MPC side sends messages of at most 64 bytes:
 `F0 7D 4D 33 4B <type> <seq> <payload> F7`. `7D` is the non-commercial
 manufacturer ID, and `4D 33 4B` is "M3K". The message types are described at the
-top of `lcd_mirror_viewer.py`. Any other MIDI on the same input is ignored.
+top of `lcd_mirror_viewer.py`; this viewer decodes protocol 3 (types 01 to 09),
+which the update's 1.0 release sends. Any other MIDI on the same input is ignored.
 
 ## License
 
