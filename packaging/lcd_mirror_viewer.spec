@@ -37,4 +37,4 @@ if sys.platform == "darwin":
                  version=VERSION,
                  info_plist={"CFBundleShortVersionString": VERSION, "CFBundleVersion": VERSION,
                              "NSHighResolutionCapable": True, "LSMinimumSystemVersion": MACOS_MIN,
-                             "NSHumanReadableCopyright": "Companion helper for the P-MONEY MPC3000 update. MIT License. Not affiliated with Akai or inMusic."})
+                             "NSHumanReadableCopyright": "Companion helper for the 3K PLUS MPC3000 update. MIT License. Not affiliated with Akai or inMusic."})

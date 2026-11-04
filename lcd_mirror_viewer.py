@@ -40,7 +40,7 @@ screen instead.  Any other MIDI on the port is ignored.
 from __future__ import annotations
 
 __version__ = "1.1.1"
-ABOUT = ("A companion helper for the P-MONEY MPC3000 update: shows the MPC3000's screen, sent "
+ABOUT = ("A companion helper for the 3K PLUS MPC3000 update: shows the MPC3000's screen, sent "
          "as MIDI SysEx from MIDI OUT D.\n\nFree software, MIT License. Unofficial; not affiliated "
          "with Akai Professional or inMusic.")
 

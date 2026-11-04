@@ -1,6 +1,6 @@
 # LCD Mirror
 
-**A companion helper for the P-MONEY MPC3000 update.**
+**A companion helper for the 3K PLUS MPC3000 update.**
 
 A free desktop window that shows an Akai MPC3000's screen live on a Mac or PC.
 The MPC sends its screen as MIDI SysEx, and this app draws it: the 40×8 text
@@ -12,7 +12,7 @@ which instrument the app works with.
 
 ## What you need
 
-- An MPC3000 running the **P-MONEY MPC3000 update** with its LCD mirror, which
+- An MPC3000 running the **3K PLUS MPC3000 update** with its LCD mirror, which
   streams the screen. The update patches your own copy of OS 3.16. It is not
   part of this repository, and no Akai software is included or distributed here.
 - A MIDI interface: the MPC3000's **MIDI OUT D** to the computer's MIDI input.
